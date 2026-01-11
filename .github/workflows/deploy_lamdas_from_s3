@@ -1,0 +1,110 @@
+name: Deploy Lambdas from S3 (S3 Change Aware)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::749174759054:role/DeployerRole
+          aws-region: us-east-1
+
+      # -------- hello_world --------
+      - name: Check hello_world S3 object hash
+        id: hw_hash
+        run: |
+          ETAG=$(aws s3api head-object \
+            --bucket lambda-zip-bucket-for-testing-jan \
+            --key hello_world.zip \
+            --query ETag \
+            --output text | tr -d '"')
+
+          echo "etag=$ETAG" >> $GITHUB_OUTPUT
+
+      - name: Print S3 hello_world hash
+        run: |
+          echo "S3 hello_world.zip ETag: ${{ steps.hw_hash.outputs.etag }}"
+
+
+      - name: Get deployed hello_world hash
+        id: hw_current
+        run: |
+          CURRENT=$(aws lambda get-function-configuration \
+            --function-name test-hello-world \
+            --query 'Environment.Variables.CODE_ETAG' \
+            --output text 2>/dev/null || echo "NONE")
+
+          echo "etag=$CURRENT" >> $GITHUB_OUTPUT
+
+      - name: Print Lambda hello_world deployed hash
+        run: |
+          echo "Lambda test-hello-world CODE_ETAG: ${{ steps.hw_current.outputs.etag }}"
+
+      - name: Deployment decision
+        run: |
+          if [ "${{ steps.hw_hash.outputs.etag }}" = "${{ steps.hw_current.outputs.etag }}" ]; then
+            echo "No deployment needed — code already up to date."
+          else
+            echo "Deployment required — new code detected in S3."
+          fi
+
+      - name: Deploy hello_world if changed
+        if: steps.hw_hash.outputs.etag != steps.hw_current.outputs.etag
+        run: |
+          aws lambda update-function-code \
+            --function-name test-hello-world \
+            --s3-bucket lambda-zip-bucket-for-testing-jan \
+            --s3-key hello_world.zip
+
+          aws lambda wait function-updated \
+            --function-name test-hello-world
+
+          aws lambda update-function-configuration \
+            --function-name test-hello-world \
+            --environment "Variables={CODE_ETAG=${{ steps.hw_hash.outputs.etag }}}"
+
+      # -------- hello_world_2 --------
+      - name: Check hello_world_2 S3 object hash
+        id: hw2_hash
+        run: |
+          ETAG=$(aws s3api head-object \
+            --bucket lambda-zip-bucket-for-testing-2-jan \
+            --key hello_world_2.zip \
+            --query ETag \
+            --output text | tr -d '"')
+
+          echo "etag=$ETAG" >> $GITHUB_OUTPUT
+
+      - name: Get deployed hello_world_2 hash
+        id: hw2_current
+        run: |
+          CURRENT=$(aws lambda get-function-configuration \
+            --function-name test-function-2 \
+            --query 'Environment.Variables.CODE_ETAG' \
+            --output text 2>/dev/null || echo "NONE")
+
+          echo "etag=$CURRENT" >> $GITHUB_OUTPUT
+
+      - name: Deploy hello_world_2 if changed
+        if: steps.hw2_hash.outputs.etag != steps.hw2_current.outputs.etag
+        run: |
+          aws lambda update-function-code \
+            --function-name test-function-2 \
+            --s3-bucket lambda-zip-bucket-for-testing-2-jan \
+            --s3-key hello_world_2.zip
+
+          aws lambda wait function-updated \
+            --function-name test-function-2
+
+          aws lambda update-function-configuration \
+            --function-name test-function-2 \
+            --environment "Variables={CODE_ETAG=${{ steps.hw2_hash.outputs.etag }}}"
