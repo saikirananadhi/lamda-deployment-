@@ -23,7 +23,7 @@ jobs:
         id: hw_hash
         run: |
           ETAG=$(aws s3api head-object \
-            --bucket lambda-zip-bucket-for-testing-jan \
+            --bucket sop-reasoner1-s3 \
             --key hello_world.zip \
             --query ETag \
             --output text | tr -d '"')
@@ -39,7 +39,7 @@ jobs:
         id: hw_current
         run: |
           CURRENT=$(aws lambda get-function-configuration \
-            --function-name test-hello-world \
+            --function-name sop-reasoner1-lamda \
             --query 'Environment.Variables.CODE_ETAG' \
             --output text 2>/dev/null || echo "NONE")
 
@@ -61,15 +61,15 @@ jobs:
         if: steps.hw_hash.outputs.etag != steps.hw_current.outputs.etag
         run: |
           aws lambda update-function-code \
-            --function-name test-hello-world \
-            --s3-bucket lambda-zip-bucket-for-testing-jan \
+            --function-name sop-reasoner1-lamda \
+            --s3-bucket sop-reasoner1-s3 \
             --s3-key hello_world.zip
 
           aws lambda wait function-updated \
-            --function-name test-hello-world
+            --function-name sop-reasoner1-lamda
 
           aws lambda update-function-configuration \
-            --function-name test-hello-world \
+            --function-name sop-reasoner1-lamda \
             --environment "Variables={CODE_ETAG=${{ steps.hw_hash.outputs.etag }}}"
 
       # -------- hello_world_2 --------
@@ -77,7 +77,7 @@ jobs:
         id: hw2_hash
         run: |
           ETAG=$(aws s3api head-object \
-            --bucket lambda-zip-bucket-for-testing-2-jan \
+            --bucket sop-reasoner2-s3 \
             --key hello_world_2.zip \
             --query ETag \
             --output text | tr -d '"')
@@ -88,7 +88,7 @@ jobs:
         id: hw2_current
         run: |
           CURRENT=$(aws lambda get-function-configuration \
-            --function-name test-function-2 \
+            --function-name sop-reasoner2-lamda \
             --query 'Environment.Variables.CODE_ETAG' \
             --output text 2>/dev/null || echo "NONE")
 
@@ -98,13 +98,13 @@ jobs:
         if: steps.hw2_hash.outputs.etag != steps.hw2_current.outputs.etag
         run: |
           aws lambda update-function-code \
-            --function-name test-function-2 \
-            --s3-bucket lambda-zip-bucket-for-testing-2-jan \
+            --function-name sop-reasoner2-lamda \
+            --s3-bucket sop-reasoner2-s3 \
             --s3-key hello_world_2.zip
 
           aws lambda wait function-updated \
-            --function-name test-function-2
+            --function-name sop-reasoner2-lamda
 
           aws lambda update-function-configuration \
-            --function-name test-function-2 \
+            --function-name sop-reasoner2-lamda \
             --environment "Variables={CODE_ETAG=${{ steps.hw2_hash.outputs.etag }}}"
