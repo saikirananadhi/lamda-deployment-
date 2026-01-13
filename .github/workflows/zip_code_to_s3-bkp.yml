@@ -1,4 +1,4 @@
-name: Package Lambdas and Upload to S3
+name: Backup - Package Lambdas and Upload to S3
 
 on:
   push:

@@ -1,4 +1,4 @@
-name: Deploy Lambdas from S3 (S3 Change Aware)
+name: Backup - Deploy Lambdas from S3 (S3 Change Aware)
 
 on:
   workflow_dispatch:
