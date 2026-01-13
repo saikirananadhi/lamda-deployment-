@@ -1,0 +1,162 @@
+name: Backup Upload Zip to S3
+
+on:
+  push:
+    branches:
+      - xyz
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  hello_world:
+    name: Package hello_world
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect changes in hello_world
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            hello_world:
+              - 'hello_world/**'
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.hello_world == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::474852689250:role/DeployerRole
+          aws-region: us-east-1
+
+      - name: Determine next patch version
+        if: steps.changes.outputs.hello_world == 'true'
+        id: version
+        run: |
+          BUCKET="lambda-artifacts-bucket-sop"
+          PREFIX="hello_world/hello_world-1.0."
+
+          LATEST_PATCH=$(aws s3 ls s3://$BUCKET/hello_world/ \
+            | grep "hello_world-1.0." \
+            | sed -E "s/.*hello_world-1\.0\.([0-9]+)\.zip/\1/" \
+            | sort -n \
+            | tail -1)
+
+          if [ -z "$LATEST_PATCH" ]; then
+            NEXT_PATCH=1
+          else
+            NEXT_PATCH=$((LATEST_PATCH + 1))
+          fi
+
+          echo "version=1.0.$NEXT_PATCH" >> $GITHUB_OUTPUT
+
+      - name: Zip hello_world
+        if: steps.changes.outputs.hello_world == 'true'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          cd hello_world
+          zip -r ../hello_world-$VERSION.zip .
+          cd ..
+
+      - name: Upload hello_world to S3
+        if: steps.changes.outputs.hello_world == 'true'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          aws s3 cp \
+            hello_world-$VERSION.zip \
+            s3://lambda-artifacts-bucket-sop/hello_world/hello_world-$VERSION.zip
+
+      - name: Cleanup old hello_world zips (keep last 5)
+        if: steps.changes.outputs.hello_world == 'true'
+        run: |
+          BUCKET="lambda-artifacts-bucket-sop"
+          PREFIX="hello_world/"
+
+          aws s3 ls s3://$BUCKET/$PREFIX \
+            | awk '{print $4}' \
+            | sort -V \
+            | head -n -5 \
+            | while read file; do
+                echo "Deleting $file"
+                aws s3 rm s3://$BUCKET/$PREFIX$file
+              done
+
+
+  hello_world_2:
+    name: Package hello_world_2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect changes in hello_world_2
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            hello_world_2:
+              - 'hello_world_2/**'
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.hello_world_2 == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::474852689250:role/DeployerRole
+          aws-region: us-east-1
+
+      - name: Determine next patch version
+        if: steps.changes.outputs.hello_world_2 == 'true'
+        id: version
+        run: |
+          BUCKET="lambda-artifacts-bucket-sop"
+          PREFIX="hello_world_2/hello_world_2-1.0."
+
+          LATEST_PATCH=$(aws s3 ls s3://$BUCKET/hello_world_2/ \
+            | grep "hello_world_2-1.0." \
+            | sed -E "s/.*hello_world_2-1\.0\.([0-9]+)\.zip/\1/" \
+            | sort -n \
+            | tail -1)
+
+          if [ -z "$LATEST_PATCH" ]; then
+            NEXT_PATCH=1
+          else
+            NEXT_PATCH=$((LATEST_PATCH + 1))
+          fi
+
+          echo "version=1.0.$NEXT_PATCH" >> $GITHUB_OUTPUT
+
+      - name: Zip hello_world_2
+        if: steps.changes.outputs.hello_world_2 == 'true'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          cd hello_world_2
+          zip -r ../hello_world_2-$VERSION.zip .
+          cd ..
+
+      - name: Upload hello_world_2 to S3
+        if: steps.changes.outputs.hello_world_2 == 'true'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          aws s3 cp \
+            hello_world_2-$VERSION.zip \
+            s3://lambda-artifacts-bucket-sop/hello_world_2/hello_world_2-$VERSION.zip
+
+      - name: Cleanup old hello_world_2 zips (keep last 5)
+        if: steps.changes.outputs.hello_world_2 == 'true'
+        run: |
+          BUCKET="lambda-artifacts-bucket-sop"
+          PREFIX="hello_world_2/"
+
+          aws s3 ls s3://$BUCKET/$PREFIX \
+            | awk '{print $4}' \
+            | sort -V \
+            | head -n -5 \
+            | while read file; do
+                echo "Deleting $file"
+                aws s3 rm s3://$BUCKET/$PREFIX$file
+              done

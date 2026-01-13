@@ -5,18 +5,42 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+    inputs:
+      hw_bump_major:
+        description: "hello_world: Bump MAJOR (x.0.0)"
+        type: boolean
+        default: false
+
+      hw_bump_minor:
+        description: "hello_world: Bump MINOR (0.x.0)"
+        type: boolean
+        default: false
+
+      hw2_bump_major:
+        description: "hello_world_2: Bump MAJOR (x.0.0)"
+        type: boolean
+        default: false
+
+      hw2_bump_minor:
+        description: "hello_world_2: Bump MINOR (0.x.0)"
+        type: boolean
+        default: false
+
 permissions:
   id-token: write
   contents: read
 
 jobs:
+  # ======================================================
+  # hello_world
+  # ======================================================
   hello_world:
-    name: Package hello_world
     runs-on: ubuntu-latest
+    name: Package hello_world
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Detect changes in hello_world
         id: changes
@@ -27,72 +51,81 @@ jobs:
               - 'hello_world/**'
 
       - name: Configure AWS credentials
-        if: steps.changes.outputs.hello_world == 'true'
+        if: |
+          (github.event_name == 'push' && steps.changes.outputs.hello_world == 'true') ||
+          inputs.hw_bump_major == true ||
+          inputs.hw_bump_minor == true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::474852689250:role/DeployerRole
           aws-region: us-east-1
 
-      - name: Determine next patch version
-        if: steps.changes.outputs.hello_world == 'true'
+      - name: Determine next version (hello_world)
+        if: |
+          (github.event_name == 'push' && steps.changes.outputs.hello_world == 'true') ||
+          inputs.hw_bump_major == true ||
+          inputs.hw_bump_minor == true
         id: version
         run: |
           BUCKET="lambda-artifacts-bucket-sop"
-          PREFIX="hello_world/hello_world-1.0."
+          PREFIX="hello_world/"
 
-          LATEST_PATCH=$(aws s3 ls s3://$BUCKET/hello_world/ \
-            | grep "hello_world-1.0." \
-            | sed -E "s/.*hello_world-1\.0\.([0-9]+)\.zip/\1/" \
-            | sort -n \
+          LATEST=$(aws s3 ls s3://$BUCKET/$PREFIX \
+            | awk '{print $4}' \
+            | sed -E 's/hello_world-([0-9]+\.[0-9]+\.[0-9]+)\.zip/\1/' \
+            | sort -V \
             | tail -1)
 
-          if [ -z "$LATEST_PATCH" ]; then
-            NEXT_PATCH=1
+          if [ -z "$LATEST" ]; then
+            MAJOR=1; MINOR=0; PATCH=0
           else
-            NEXT_PATCH=$((LATEST_PATCH + 1))
+            IFS='.' read MAJOR MINOR PATCH <<< "$LATEST"
           fi
 
-          echo "version=1.0.$NEXT_PATCH" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.hw_bump_major }}" = "true" ]; then
+            MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0
+          elif [ "${{ inputs.hw_bump_minor }}" = "true" ]; then
+            MINOR=$((MINOR+1)); PATCH=0
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            PATCH=$((PATCH+1))
+          else
+            exit 0
+          fi
 
-      - name: Zip hello_world
-        if: steps.changes.outputs.hello_world == 'true'
+          echo "version=$MAJOR.$MINOR.$PATCH" >> $GITHUB_OUTPUT
+
+      - name: Zip & Upload hello_world
+        if: steps.version.outputs.version != ''
         run: |
           VERSION=${{ steps.version.outputs.version }}
           cd hello_world
           zip -r ../hello_world-$VERSION.zip .
           cd ..
-
-      - name: Upload hello_world to S3
-        if: steps.changes.outputs.hello_world == 'true'
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
           aws s3 cp \
             hello_world-$VERSION.zip \
             s3://lambda-artifacts-bucket-sop/hello_world/hello_world-$VERSION.zip
 
       - name: Cleanup old hello_world zips (keep last 5)
-        if: steps.changes.outputs.hello_world == 'true'
+        if: steps.version.outputs.version != ''
         run: |
-          BUCKET="lambda-artifacts-bucket-sop"
-          PREFIX="hello_world/"
-
-          aws s3 ls s3://$BUCKET/$PREFIX \
+          aws s3 ls s3://lambda-artifacts-bucket-sop/hello_world/ \
             | awk '{print $4}' \
             | sort -V \
             | head -n -5 \
             | while read file; do
-                echo "Deleting $file"
-                aws s3 rm s3://$BUCKET/$PREFIX$file
+                aws s3 rm s3://lambda-artifacts-bucket-sop/hello_world/$file
               done
 
+  # ======================================================
+  # hello_world_2
+  # ======================================================
 
   hello_world_2:
-    name: Package hello_world_2
     runs-on: ubuntu-latest
+    name: Package hello_world_2
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Detect changes in hello_world_2
         id: changes
@@ -103,60 +136,67 @@ jobs:
               - 'hello_world_2/**'
 
       - name: Configure AWS credentials
-        if: steps.changes.outputs.hello_world_2 == 'true'
+        if: |
+          (github.event_name == 'push' && steps.changes.outputs.hello_world_2 == 'true') ||
+          inputs.hw2_bump_major == true ||
+          inputs.hw2_bump_minor == true
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::474852689250:role/DeployerRole
+          role-to-assume: arn:aws:iam::749174759054:role/DeployerRole
           aws-region: us-east-1
 
-      - name: Determine next patch version
-        if: steps.changes.outputs.hello_world_2 == 'true'
+      - name: Determine next version (hello_world_2)
+        if: |
+          (github.event_name == 'push' && steps.changes.outputs.hello_world_2 == 'true') ||
+          inputs.hw2_bump_major == true ||
+          inputs.hw2_bump_minor == true
         id: version
         run: |
           BUCKET="lambda-artifacts-bucket-sop"
-          PREFIX="hello_world_2/hello_world_2-1.0."
+          PREFIX="hello_world_2/"
 
-          LATEST_PATCH=$(aws s3 ls s3://$BUCKET/hello_world_2/ \
-            | grep "hello_world_2-1.0." \
-            | sed -E "s/.*hello_world_2-1\.0\.([0-9]+)\.zip/\1/" \
-            | sort -n \
+          LATEST=$(aws s3 ls s3://$BUCKET/$PREFIX \
+            | awk '{print $4}' \
+            | sed -E 's/hello_world_2-([0-9]+\.[0-9]+\.[0-9]+)\.zip/\1/' \
+            | sort -V \
             | tail -1)
 
-          if [ -z "$LATEST_PATCH" ]; then
-            NEXT_PATCH=1
+          if [ -z "$LATEST" ]; then
+            MAJOR=1; MINOR=0; PATCH=0
           else
-            NEXT_PATCH=$((LATEST_PATCH + 1))
+            IFS='.' read MAJOR MINOR PATCH <<< "$LATEST"
           fi
 
-          echo "version=1.0.$NEXT_PATCH" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.hw2_bump_major }}" = "true" ]; then
+            MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0
+          elif [ "${{ inputs.hw2_bump_minor }}" = "true" ]; then
+            MINOR=$((MINOR+1)); PATCH=0
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            PATCH=$((PATCH+1))
+          else
+            exit 0
+          fi
 
-      - name: Zip hello_world_2
-        if: steps.changes.outputs.hello_world_2 == 'true'
+          echo "version=$MAJOR.$MINOR.$PATCH" >> $GITHUB_OUTPUT
+
+      - name: Zip & Upload hello_world_2
+        if: steps.version.outputs.version != ''
         run: |
           VERSION=${{ steps.version.outputs.version }}
           cd hello_world_2
           zip -r ../hello_world_2-$VERSION.zip .
           cd ..
-
-      - name: Upload hello_world_2 to S3
-        if: steps.changes.outputs.hello_world_2 == 'true'
-        run: |
-          VERSION=${{ steps.version.outputs.version }}
           aws s3 cp \
             hello_world_2-$VERSION.zip \
             s3://lambda-artifacts-bucket-sop/hello_world_2/hello_world_2-$VERSION.zip
 
       - name: Cleanup old hello_world_2 zips (keep last 5)
-        if: steps.changes.outputs.hello_world_2 == 'true'
+        if: steps.version.outputs.version != ''
         run: |
-          BUCKET="lambda-artifacts-bucket-sop"
-          PREFIX="hello_world_2/"
-
-          aws s3 ls s3://$BUCKET/$PREFIX \
+          aws s3 ls s3://lambda-artifacts-bucket-sop/hello_world_2/ \
             | awk '{print $4}' \
             | sort -V \
             | head -n -5 \
             | while read file; do
-                echo "Deleting $file"
-                aws s3 rm s3://$BUCKET/$PREFIX$file
+                aws s3 rm s3://lambda-artifacts-bucket-sop/hello_world_2/$file
               done
