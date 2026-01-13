@@ -142,7 +142,7 @@ jobs:
           inputs.hw2_bump_minor == true
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::749174759054:role/DeployerRole
+          role-to-assume: arn:aws:iam::474852689250:role/DeployerRole
           aws-region: us-east-1
 
       - name: Determine next version (hello_world_2)
