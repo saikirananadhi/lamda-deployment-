@@ -1,0 +1,84 @@
+name: Deploy lambdas from S3(Single Function)
+
+on:
+  workflow_dispatch:
+    inputs:
+      lambda_name:
+        description: "Lambda function to deploy"
+        required: true
+        type: choice
+        options:
+          - hello_world
+          - hello_world_2
+
+      version:
+        description: "Version to deploy (example: 1.0.8)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::474852689250:role/DeployerRole
+          aws-region: us-east-1
+
+      - name: Resolve deployment parameters
+        id: params
+        run: |
+          BUCKET="lambda-artifacts-bucket-sop"
+
+          if [ "${{ inputs.lambda_name }}" = "hello_world" ]; then
+            FUNCTION_NAME="sop-reasoner1-lamda"
+            PREFIX="hello_world"
+            ZIP_NAME="hello_world-${{ inputs.version }}.zip"
+          else
+            FUNCTION_NAME="sop-reasoner2-lamda"
+            PREFIX="hello_world_2"
+            ZIP_NAME="hello_world_2-${{ inputs.version }}.zip"
+          fi
+
+          S3_KEY="$PREFIX/$ZIP_NAME"
+
+          echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
+          echo "function=$FUNCTION_NAME" >> $GITHUB_OUTPUT
+          echo "s3_key=$S3_KEY" >> $GITHUB_OUTPUT
+
+      - name: Validate ZIP exists in S3
+        run: |
+          aws s3api head-object \
+            --bucket ${{ steps.params.outputs.bucket }} \
+            --key ${{ steps.params.outputs.s3_key }}
+
+      - name: Get S3 object ETag
+        id: s3_hash
+        run: |
+          ETAG=$(aws s3api head-object \
+            --bucket ${{ steps.params.outputs.bucket }} \
+            --key ${{ steps.params.outputs.s3_key }} \
+            --query ETag \
+            --output text | tr -d '"')
+
+          echo "etag=$ETAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy selected version to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ steps.params.outputs.function }} \
+            --s3-bucket ${{ steps.params.outputs.bucket }} \
+            --s3-key ${{ steps.params.outputs.s3_key }}
+
+          aws lambda wait function-updated \
+            --function-name ${{ steps.params.outputs.function }}
+
+          aws lambda update-function-configuration \
+            --function-name ${{ steps.params.outputs.function }} \
+            --environment "Variables={CODE_ETAG=${{ steps.s3_hash.outputs.etag }}}"
