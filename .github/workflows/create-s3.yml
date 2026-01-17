@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - main
-    paths:
-      - infra/s3/**
+  workflow_dispatch:
+    
 
 permissions:
   id-token: write   # REQUIRED for OIDC
@@ -41,3 +41,4 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve
         working-directory: infra/s3
+
