@@ -5,3 +5,40 @@ on:
     branches:
       - main
   workflow_dispatch:
+
+permissions:
+  id-token: write   # REQUIRED for OIDC
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<4748-5268-9250>:role/github-actions-role
+          aws-region: ap-south-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/s3
+
+      - name: Terraform Plan
+        run: terraform plan
+        working-directory: infra/s3
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: infra/s3
+
+
