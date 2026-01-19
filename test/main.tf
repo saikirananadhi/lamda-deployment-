@@ -1,12 +1,4 @@
-provider "aws" {
-  region = "ap-south-1"
-}
-
-resource "aws_s3_bucket" "example" {
-  bucket = "my-new-github-actions-bucket-12345"
-
-  tags = {
-    Environment = "dev"
-    ManagedBy  = "GitHubActions"
-  }
-}
+#create s3 bucket
+resource "aws_s3_bucket" "mybucket" {
+  bucket = "my-tf-test-bucket"
+  bucket = var.bucketname
